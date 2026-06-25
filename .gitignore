@@ -1,0 +1,18 @@
+# secrets / env
+.env
+.env.development
+.env.production
+.env.local
+# node / build
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+# ide / os / logs
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
