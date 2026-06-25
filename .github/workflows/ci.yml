@@ -52,3 +52,26 @@ jobs:
         env:
           VITE_API_BASE_URL: http://localhost:8000
           VITE_AUTH_API_BASE_URL: http://localhost:8080
+
+  docker-build:
+    name: Docker Images Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          tags: devready-backend:ci
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: devready-frontend:ci
+          build-args: |
+            VITE_API_BASE_URL=http://localhost:8000
+            VITE_AUTH_API_BASE_URL=http://localhost:8080

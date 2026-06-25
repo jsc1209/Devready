@@ -3,20 +3,46 @@ services:
     image: mysql:8.0
     container_name: devready-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: devready
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-devready}
       MYSQL_DATABASE: devready
-      MYSQL_USER: devready
-      MYSQL_PASSWORD: devready
     ports:
       - "3306:3306"
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
     volumes:
-      - ./db:/docker-entrypoint-initdb.d        # devready_schema.sql 자동 로드
-      - devready_mysql_data:/var/lib/mysql       # 데이터 영속
+      - mysql_data:/var/lib/mysql
+      - ./db:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-devready}"]
       interval: 10s
-      retries: 5
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: devready-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/devready?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-devready}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRATION: 3600000
+      JWT_REFRESH_EXPIRATION: 604800000
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_AUTH_API_BASE_URL: http://localhost:8080
+    container_name: devready-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
 
 volumes:
-  devready_mysql_data:
+  mysql_data:
