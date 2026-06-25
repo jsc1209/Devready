@@ -5,6 +5,7 @@ import SignupPage from "./pages/SignupPage";
 import LoginPage from "./pages/LoginPage";
 import MyPage from "./pages/MyPage";
 import LandingPage from "./pages/LandingPage";
+import HistoryPage from "./pages/HistoryPage";
 import Layout from "./components/layout/Layout";
 
 const Home = () => (
@@ -28,6 +29,7 @@ const App = () => (
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/me" element={<MyPage />} />
+      <Route path="/history" element={<HistoryPage />} />
     </Route>
   </Routes>
 )
