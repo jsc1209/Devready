@@ -7,6 +7,8 @@ import MyPage from "./pages/MyPage";
 import LandingPage from "./pages/LandingPage";
 import HistoryPage from "./pages/HistoryPage";
 import InterviewLanding from "./pages/InterviewLanding";
+import JobsPage from "./pages/JobsPage";
+import JobDetailPage from "./pages/JobDetailPage";
 import Layout from "./components/layout/Layout";
 
 const Home = () => (
@@ -32,6 +34,8 @@ const App = () => (
       <Route path="/me" element={<MyPage />} />
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/interview" element={<InterviewLanding />} />
+      <Route path="/jobs" element={<JobsPage />} />
+      <Route path="/jobs/:id" element={<JobDetailPage />} />
     </Route>
   </Routes>
 )
