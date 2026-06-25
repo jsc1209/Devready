@@ -1,0 +1,17 @@
+.env
+**/application-secret.yml
+**/application-local.yml
+*.pem
+*.key
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+out/
+bin/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log

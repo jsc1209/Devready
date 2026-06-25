@@ -71,7 +71,7 @@ CREATE TABLE `subscription` (
   PRIMARY KEY (`subscription_id`),
   CONSTRAINT `fk_subscription_member_id` FOREIGN KEY (`member_id`) REFERENCES `member` (`member_id`),
   CONSTRAINT `ck_subscription_1` CHECK (`plan_type` IN ('ONE_TIME','STANDARD','PREMIUM')),
-  CONSTRAINT `ck_subscription_2` CHECK (end_date >= start_date),
+  CONSTRAINT `ck_subscription_2` CHECK (`end_date` >= `start_date`),
   CONSTRAINT `ck_subscription_3` CHECK (`status` IN ('ACTIVE','EXPIRED','CANCELLED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='구독';
 
@@ -89,7 +89,7 @@ CREATE TABLE `payment` (
   UNIQUE KEY `uq_payment_1` (`transaction_no`),
   CONSTRAINT `fk_payment_member_id` FOREIGN KEY (`member_id`) REFERENCES `member` (`member_id`),
   CONSTRAINT `fk_payment_subscription_id` FOREIGN KEY (`subscription_id`) REFERENCES `subscription` (`subscription_id`),
-  CONSTRAINT `ck_payment_1` CHECK (amount>0),
+  CONSTRAINT `ck_payment_1` CHECK (`amount`>0),
   CONSTRAINT `ck_payment_2` CHECK (`status` IN ('PAID','FAILED','REFUNDED','READY','IN_PROGRESS'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='결제';
 
@@ -741,7 +741,7 @@ CREATE TABLE `sanction` (
   CONSTRAINT `fk_sanction_filter_log_id` FOREIGN KEY (`filter_log_id`) REFERENCES `content_filter_log` (`filter_log_id`),
   CONSTRAINT `fk_sanction_admin_id` FOREIGN KEY (`admin_id`) REFERENCES `member` (`member_id`),
   CONSTRAINT `ck_sanction_1` CHECK (`sanction_type` IN ('WARNING','SUSPEND','BAN')),
-  CONSTRAINT `ck_sanction_2` CHECK (end_date >= start_date)
+  CONSTRAINT `ck_sanction_2` CHECK (`sanction_end_date` >= `sanction_start_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='회원 제재';
 
 DROP TABLE IF EXISTS `banned_word`;

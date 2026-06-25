@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devready.backend_user.auth.mapper.AuthMapper">
+  <select id="countByEmail" resultType="int">
+    SELECT COUNT(*) FROM member WHERE email = #{email}
+  </select>
+  <insert id="insertMember" parameterType="com.devready.backend_user.auth.vo.MemberVO"
+          useGeneratedKeys="true" keyProperty="memberId">
+    INSERT INTO member (email, password, name, phone, nickname, last_login_method, role, status, joined_at)
+    VALUES (#{email}, #{password}, #{name}, #{phone}, #{nickname}, 'EMAIL', 'USER', 'ACTIVE', CURRENT_DATE)
+  </insert>
+  <select id="findByEmail" resultType="com.devready.backend_user.auth.vo.MemberVO">
+    SELECT member_id, email, password, name, phone, nickname, role, status
+    FROM member WHERE email = #{email}
+  </select>
+</mapper>

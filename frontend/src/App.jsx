@@ -1,6 +1,9 @@
 import { Routes, Route, Link } from 'react-router-dom'
 import { Box, Typography, Button, Stack } from '@mui/material'
 import ResumeAnalyzePage from './pages/ResumeAnalyzePage'
+import SignupPage from "./pages/SignupPage";
+import LoginPage from "./pages/LoginPage";
+import MyPage from "./pages/MyPage";
 
 const Home = () => (
   <Box sx={{ p: 4 }}>
@@ -18,6 +21,9 @@ const App = () => (
   <Routes>
     <Route path="/" element={<Home />} />
     <Route path="/resume" element={<ResumeAnalyzePage />} />
+    <Route path="/signup" element={<SignupPage />} />
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/me" element={<MyPage />} />
   </Routes>
 )
 
