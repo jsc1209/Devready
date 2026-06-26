@@ -6,6 +6,7 @@ import {
   CheckCircle,
   PhotoCamera,
 } from "@mui/icons-material";
+import useAuthStore from "../../store/authStore";
 
 // 입력(raw input) 공통 스타일 — rounded-xl bg-secondary border focus:border-primary/60
 const inputSx = {
@@ -30,14 +31,17 @@ const inputSx = {
  * 현재 비밀번호 검증 후 수정, 새 비밀번호 변경(Visibility 토글).
  */
 export default function ProfileTab() {
+  // 실제 로그인 사용자 연동(authStore.user). nickname/email 은 실제 값, 미로그인 시 mock fallback.
+  // phone 은 백엔드가 "000-0000-..." 자동생성이라 표시 부적합 → mock 값 유지.
+  const user = useAuthStore((s) => s.user);
   const [showPw, setShowPw] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [verifyPw, setVerifyPw] = useState("");
   const [verified, setVerified] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [profile, setProfile] = useState({
-    nickname: "김지수",
-    email: "jisu@example.com",
+    nickname: user?.nickname ?? "김지수",
+    email: user?.email ?? "jisu@example.com",
     phone: "010-1234-5678",
     newPw: "",
     confirmPw: "",

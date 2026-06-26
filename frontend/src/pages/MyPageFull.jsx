@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { Box, Typography, Stack } from "@mui/material";
+import useAuthStore from "../store/authStore";
 import {
   EmojiEvents,
   TrackChanges,
@@ -40,6 +41,13 @@ export default function MyPageFull() {
   const location = useLocation();
   const [tab, setTab] = useState("evaluation");
 
+  // 실제 로그인 사용자(authStore.user = {memberId, email, nickname}) 연동.
+  // 백엔드 nickname 은 자동생성(부자연)이라 email 을 주 식별자로 노출, 미로그인 시 mock fallback.
+  const user = useAuthStore((s) => s.user);
+  const avatarInitial =
+    user?.nickname?.[0] ?? user?.email?.[0]?.toUpperCase() ?? "김";
+  const displayName = user?.email ?? "jisu@example.com";
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const t = params.get("tab");
@@ -67,14 +75,14 @@ export default function MyPageFull() {
               color: "primary.main",
             }}
           >
-            김
+            {avatarInitial}
           </Box>
           <Box>
             <Typography sx={{ fontSize: 24, fontWeight: 700, color: "text.primary" }}>
-              김지수
+              {displayName}
             </Typography>
             <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
-              jisu@example.com · 프로 플랜 구독 중
+              프로 플랜 구독 중
             </Typography>
           </Box>
         </Stack>
