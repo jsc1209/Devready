@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devready.backend_user.jobresume.mapper.JobResumeMapper">
+
+  <select id="countJobPosting" resultType="int">
+    SELECT COUNT(*) FROM job_posting WHERE job_posting_id = #{id} AND is_deleted = 0
+  </select>
+
+  <insert id="insertJobResume" parameterType="com.devready.backend_user.jobresume.vo.JobResumeVO"
+          useGeneratedKeys="true" keyProperty="jobResumeId">
+    INSERT INTO job_resume (resume_id, job_posting_id, pdf_path, updated_at)
+    VALUES (#{resumeId}, #{jobPostingId}, #{pdfPath}, CURRENT_DATE)
+  </insert>
+
+  <select id="findActiveTemplateId" resultType="java.lang.Long">
+    SELECT template_id FROM cover_letter_template
+    ORDER BY is_active DESC, default_order ASC, template_id ASC
+    LIMIT 1
+  </select>
+
+  <!-- 스냅샷 → 정규화 materialize -->
+  <insert id="insertAcademic" parameterType="map">
+    INSERT INTO academic (job_resume_id, school_name, major, admission_date, graduation_date, gpa)
+    VALUES (#{jobResumeId}, #{schoolName}, #{major}, #{admissionDate}, #{graduationDate}, #{gpa})
+  </insert>
+
+  <insert id="insertCertificate" parameterType="map">
+    INSERT INTO certificate (job_resume_id, acquired_date, certificate_name, issuer)
+    VALUES (#{jobResumeId}, #{acquiredDate}, #{certificateName}, #{issuer})
+  </insert>
+
+  <insert id="insertCoverLetterItem" parameterType="map">
+    INSERT INTO cover_letter_item (job_resume_id, template_id, item_name, content, item_order)
+    VALUES (#{jobResumeId}, #{templateId}, #{itemName}, #{content}, #{itemOrder})
+  </insert>
+
+  <!-- 본인 job_resume 목록(resume.member_id 로 제한, 공고 정보 동봉). 컬럼은 카멜 별칭. -->
+  <select id="findJobResumesByMember" resultType="map">
+    SELECT jr.job_resume_id   AS jobResumeId,
+           jr.resume_id       AS resumeId,
+           jr.job_posting_id  AS jobPostingId,
+           jr.pdf_path        AS pdfPath,
+           jr.created_at      AS createdAt,
+           jp.company_name    AS companyName,
+           jp.job_category    AS jobCategory
+    FROM job_resume jr
+    JOIN resume r ON r.resume_id = jr.resume_id
+    LEFT JOIN job_posting jp ON jp.job_posting_id = jr.job_posting_id
+    WHERE r.member_id = #{memberId}
+    ORDER BY jr.job_resume_id DESC
+  </select>
+
+</mapper>
