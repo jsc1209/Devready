@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -11,15 +11,9 @@ import {
   Stack,
 } from "@mui/material";
 import { Search, FilterList } from "@mui/icons-material";
-import { ALL_SESSIONS, TYPE_OPTIONS } from "../data/historyMock";
+import { TYPE_OPTIONS } from "../data/historyMock";
+import { getSessions } from "../api/interviewApi";
 import HistoryRow, { HISTORY_GRID } from "../components/history/HistoryRow";
-
-// 상단 요약 통계 (원본 인라인 — 화면 요약용 고정 mock)
-const STATS = [
-  { label: "총 세션", value: "12회" },
-  { label: "평균 점수", value: "74점" },
-  { label: "최고 점수", value: "80점" },
-];
 
 /**
  * 면접 기록 페이지 (test-demo-UI/HistoryPage.tsx → JS+MUI).
@@ -29,8 +23,26 @@ export default function HistoryPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("전체");
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = ALL_SESSIONS.filter((s) => {
+  useEffect(() => {
+    getSessions()
+      .then((list) => setSessions(list))
+      .catch(() => setSessions([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalSessions = sessions.length;
+  const avgScore = totalSessions ? Math.round(sessions.reduce((a, x) => a + x.score, 0) / totalSessions) : 0;
+  const maxScore = totalSessions ? Math.max(...sessions.map((x) => x.score)) : 0;
+  const STATS = [
+    { label: "총 세션", value: `${totalSessions}회` },
+    { label: "평균 점수", value: totalSessions ? `${avgScore}점` : "-" },
+    { label: "최고 점수", value: totalSessions ? `${maxScore}점` : "-" },
+  ];
+
+  const filtered = sessions.filter((s) => {
     const matchType = typeFilter === "전체" || s.type === typeFilter;
     const matchSearch =
       s.job.includes(search) || s.type.includes(search) || s.date.includes(search);
@@ -55,7 +67,7 @@ export default function HistoryPage() {
             면접 기록
           </Typography>
           <Typography color="text.secondary" sx={{ fontSize: 14, mt: 0.5 }}>
-            총 {ALL_SESSIONS.length}회 면접 시뮬레이션을 진행했습니다
+            총 {totalSessions}회 면접 시뮬레이션을 진행했습니다
           </Typography>
         </Box>
         <Button variant="contained" onClick={() => navigate("/interview/setup")}>
@@ -139,23 +151,31 @@ export default function HistoryPage() {
         </Box>
 
         <Box>
-          {filtered.map((s, i) => {
-            const prev = filtered[i + 1];
-            const trend = prev ? s.score - prev.score : null;
-            return (
-              <Box key={s.id} sx={{ borderTop: i === 0 ? 0 : 1, borderColor: "divider" }}>
-                <HistoryRow
-                  session={s}
-                  trend={trend}
-                  onClick={() => navigate(`/history/${s.id}`)}
-                />
-              </Box>
-            );
-          })}
-          {filtered.length === 0 && (
+          {loading ? (
             <Box sx={{ py: 8, textAlign: "center", color: "text.secondary", fontSize: 14 }}>
-              검색 결과가 없습니다
+              불러오는 중…
             </Box>
+          ) : (
+            <>
+              {filtered.map((s, i) => {
+                const prev = filtered[i + 1];
+                const trend = prev ? s.score - prev.score : null;
+                return (
+                  <Box key={s.id} sx={{ borderTop: i === 0 ? 0 : 1, borderColor: "divider" }}>
+                    <HistoryRow
+                      session={s}
+                      trend={trend}
+                      onClick={() => navigate(`/history/${s.id}`)}
+                    />
+                  </Box>
+                );
+              })}
+              {filtered.length === 0 && (
+                <Box sx={{ py: 8, textAlign: "center", color: "text.secondary", fontSize: 14 }}>
+                  {totalSessions === 0 ? "아직 면접 기록이 없습니다" : "검색 결과가 없습니다"}
+                </Box>
+              )}
+            </>
           )}
         </Box>
       </Paper>

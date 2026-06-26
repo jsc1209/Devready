@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Typography, Stack } from "@mui/material";
 import {
@@ -21,66 +21,29 @@ import {
   PolarAngleAxis,
   Radar,
 } from "recharts";
+import { getSessions } from "../../api/interviewApi";
 
 const mono = "'DM Mono', monospace";
-
-// ─── Data (co-located) ─────────────────────────────────────────────────────────
-
-const INTERVIEW_HISTORY = [
-  {
-    id: "1",
-    date: "2026.06.05",
-    type: "기술 면접",
-    score: 80,
-    grade: "B+",
-    scores: { technical: 78, logic: 82, specificity: 76, depth: 74, communication: 88 },
-    wpm: 148,
-    silenceCount: 2,
-    gazeStability: 78,
-  },
-  {
-    id: "2",
-    date: "2026.06.01",
-    type: "인성 면접",
-    score: 76,
-    grade: "B",
-    scores: { technical: 72, logic: 78, specificity: 70, depth: 68, communication: 82 },
-    wpm: 142,
-    silenceCount: 3,
-    gazeStability: 72,
-  },
-  {
-    id: "3",
-    date: "2026.05.25",
-    type: "직무 면접",
-    score: 72,
-    grade: "C+",
-    scores: { technical: 68, logic: 70, specificity: 65, depth: 62, communication: 78 },
-    wpm: 135,
-    silenceCount: 4,
-    gazeStability: 65,
-  },
-  {
-    id: "4",
-    date: "2026.05.18",
-    type: "기술 면접",
-    score: 68,
-    grade: "C+",
-    scores: { technical: 60, logic: 65, specificity: 62, depth: 58, communication: 74 },
-    wpm: 130,
-    silenceCount: 5,
-    gazeStability: 60,
-  },
-];
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
 export default function InterviewHistoryTab() {
   const navigate = useNavigate();
   const [openId, setOpenId] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getSessions()
+      .then((list) => setHistory(list))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const n = history.length;
 
   // Growth chart data
-  const growthData = [...INTERVIEW_HISTORY].reverse().map((h, i) => ({
+  const growthData = [...history].reverse().map((h, i) => ({
     회차: `${i + 1}회차`,
     날짜: h.date,
     종합: h.score,
@@ -90,11 +53,11 @@ export default function InterviewHistoryTab() {
 
   // Avg radar data
   const avgScores = {
-    technical: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.technical, 0) / INTERVIEW_HISTORY.length),
-    logic: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.logic, 0) / INTERVIEW_HISTORY.length),
-    specificity: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.specificity, 0) / INTERVIEW_HISTORY.length),
-    depth: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.depth, 0) / INTERVIEW_HISTORY.length),
-    communication: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.communication, 0) / INTERVIEW_HISTORY.length),
+    technical: n ? Math.round(history.reduce((s, h) => s + h.scores.technical, 0) / n) : 0,
+    logic: n ? Math.round(history.reduce((s, h) => s + h.scores.logic, 0) / n) : 0,
+    specificity: n ? Math.round(history.reduce((s, h) => s + h.scores.specificity, 0) / n) : 0,
+    depth: n ? Math.round(history.reduce((s, h) => s + h.scores.depth, 0) / n) : 0,
+    communication: n ? Math.round(history.reduce((s, h) => s + h.scores.communication, 0) / n) : 0,
   };
 
   const radarData = [
@@ -319,7 +282,17 @@ export default function InterviewHistoryTab() {
           회차별 기록
         </Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-          {INTERVIEW_HISTORY.map((s, i) => (
+          {loading && (
+            <Typography sx={{ fontSize: 13, color: "text.secondary", textAlign: "center", py: 2 }}>
+              불러오는 중…
+            </Typography>
+          )}
+          {!loading && n === 0 && (
+            <Typography sx={{ fontSize: 13, color: "text.secondary", textAlign: "center", py: 2 }}>
+              아직 면접 기록이 없습니다.
+            </Typography>
+          )}
+          {history.map((s, i) => (
             <Box
               key={s.id}
               sx={{
@@ -360,7 +333,7 @@ export default function InterviewHistoryTab() {
                       fontFamily: mono,
                     }}
                   >
-                    #{INTERVIEW_HISTORY.length - i}
+                    #{n - i}
                   </Typography>
                   <Box sx={{ textAlign: "left" }}>
                     <Typography
@@ -489,7 +462,7 @@ export default function InterviewHistoryTab() {
                     <Box
                       component="button"
                       type="button"
-                      onClick={() => navigate(`/interview/report/${s.id}`)}
+                      onClick={() => navigate(`/history/${s.id}`)}
                       sx={{
                         display: "flex",
                         alignItems: "center",

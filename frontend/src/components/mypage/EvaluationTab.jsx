@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Typography } from "@mui/material";
 import {
@@ -14,6 +15,7 @@ import {
   PolarAngleAxis,
   Radar,
 } from "recharts";
+import { getStats } from "../../api/interviewApi";
 
 const mono = "'DM Mono', monospace";
 
@@ -27,28 +29,7 @@ const LEARNING_COURSES = [
   { title: "Spring Boot & JPA", done: 5, total: 30, accuracy: 69, color: "#EC4899" },
 ];
 
-const INTERVIEW_HISTORY = [
-  {
-    id: "1", date: "2026.06.05", type: "기술 면접", score: 80, grade: "B+",
-    scores: { technical: 78, logic: 82, specificity: 76, depth: 74, communication: 88 },
-    wpm: 148, silenceCount: 2, gazeStability: 78,
-  },
-  {
-    id: "2", date: "2026.06.01", type: "인성 면접", score: 76, grade: "B",
-    scores: { technical: 72, logic: 78, specificity: 70, depth: 68, communication: 82 },
-    wpm: 142, silenceCount: 3, gazeStability: 72,
-  },
-  {
-    id: "3", date: "2026.05.25", type: "직무 면접", score: 72, grade: "C+",
-    scores: { technical: 68, logic: 70, specificity: 65, depth: 62, communication: 78 },
-    wpm: 135, silenceCount: 4, gazeStability: 65,
-  },
-  {
-    id: "4", date: "2026.05.18", type: "기술 면접", score: 68, grade: "C+",
-    scores: { technical: 60, logic: 65, specificity: 62, depth: 58, communication: 74 },
-    wpm: 130, silenceCount: 5, gazeStability: 60,
-  },
-];
+// (면접 mock 제거 — 면접 집계는 getStats(/api/interview-sessions/stats)로 조회)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -80,21 +61,24 @@ function gradeOf(avgScore) {
 
 export default function EvaluationTab() {
   const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    avgScore: 0,
+    axisAverages: { technical: 0, logic: 0, specificity: 0, depth: 0, communication: 0 },
+    sessionCount: 0,
+  });
+  useEffect(() => {
+    getStats()
+      .then(setStats)
+      .catch(() => {});
+  }, []);
 
   const learnDone = LEARNING_COURSES.reduce((s, c) => s + c.done, 0);
   const learnTotal = LEARNING_COURSES.reduce((s, c) => s + c.total, 0);
   const learnOverall = Math.round((learnDone / learnTotal) * 100);
 
-  const avgScore = Math.round(
-    INTERVIEW_HISTORY.reduce((s, h) => s + h.score, 0) / INTERVIEW_HISTORY.length
-  );
-  const avgScores = {
-    technical: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.technical, 0) / INTERVIEW_HISTORY.length),
-    logic: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.logic, 0) / INTERVIEW_HISTORY.length),
-    specificity: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.specificity, 0) / INTERVIEW_HISTORY.length),
-    depth: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.depth, 0) / INTERVIEW_HISTORY.length),
-    communication: Math.round(INTERVIEW_HISTORY.reduce((s, h) => s + h.scores.communication, 0) / INTERVIEW_HISTORY.length),
-  };
+  // 면접 종합/5축 평균 — DB 집계(getStats). 데이터 없으면 0.
+  const avgScore = stats.avgScore;
+  const avgScores = stats.axisAverages;
   const radarData = [
     { subject: "기술정확성", score: avgScores.technical },
     { subject: "논리구조", score: avgScores.logic },

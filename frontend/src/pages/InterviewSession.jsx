@@ -449,7 +449,21 @@ export default function InterviewSession() {
         const finalEntries = entries
           .map((e, i) => (i === targetIdx ? { ...e, followup: currentFollowup, followupAnswer: answerText } : e))
           .map((e) => ({ ...e, question: e.main, followupQ: e.followup, followupA: e.followupAnswer }));
-        navigate("/interview/report/demo", { state: { entries: finalEntries, config: { job, level, type, interviewer, companyType: config.companyType } } });
+        navigate("/interview/report/demo", {
+          state: {
+            entries: finalEntries,
+            config: { job, level, type, interviewer, companyType: config.companyType },
+            // 슬라이스4 저장용: 바인딩 id + 세션 메타(Report 에서 saveSession 호출)
+            jobResumeId: config.jobResumeId,
+            sessionMeta: {
+              interviewType: type,
+              interviewerType: interviewer,
+              inputMode: mode,
+              videoEnabled,
+              questionCount: TOTAL,
+            },
+          },
+        });
       }
     }
   };

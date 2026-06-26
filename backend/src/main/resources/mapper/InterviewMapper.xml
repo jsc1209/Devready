@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devready.backend_user.interview.mapper.InterviewMapper">
+
+  <!-- ───── 소유 검증 ───── -->
+  <select id="ownerOfJobResume" resultType="java.lang.Long">
+    SELECT r.member_id
+    FROM job_resume jr
+    JOIN resume r ON r.resume_id = jr.resume_id
+    WHERE jr.job_resume_id = #{id}
+  </select>
+
+  <!-- ───── 저장 ───── -->
+  <insert id="insertSession" parameterType="map" useGeneratedKeys="true"
+          keyProperty="sessionId" keyColumn="session_id">
+    INSERT INTO interview_session
+      (member_id, job_resume_id, question_count, interview_type, interviewer_type,
+       interviewer_count, input_mode, use_video, is_completed, started_at, ended_at)
+    VALUES
+      (#{memberId}, #{jobResumeId}, #{questionCount}, #{interviewType}, #{interviewerType},
+       #{interviewerCount}, #{inputMode}, #{useVideo}, 1, NOW(), NOW())
+  </insert>
+
+  <insert id="insertQuestion" parameterType="map" useGeneratedKeys="true"
+          keyProperty="questionId" keyColumn="question_id">
+    INSERT INTO question
+      (session_id, question_text, question_type, source, difficulty, display_order, parent_question_id)
+    VALUES
+      (#{sessionId}, #{questionText}, #{questionType}, #{source}, #{difficulty}, #{displayOrder}, #{parentQuestionId})
+  </insert>
+
+  <insert id="insertAnswer" parameterType="map" useGeneratedKeys="true"
+          keyProperty="answerId" keyColumn="answer_id">
+    INSERT INTO answer (question_id, answer_text, answer_order)
+    VALUES (#{questionId}, #{answerText}, #{answerOrder})
+  </insert>
+
+  <insert id="insertAnswerScore" parameterType="map">
+    INSERT INTO answer_score
+      (answer_id, technical_accuracy_score, logical_structure_score, specificity_score,
+       depth_understanding_score, communication_score, total_score, item_feedback)
+    VALUES
+      (#{answerId}, #{technical}, #{logic}, #{specificity},
+       #{depth}, #{communication}, #{total}, #{feedback})
+  </insert>
+
+  <insert id="insertReport" parameterType="map">
+    INSERT INTO interview_report
+      (session_id, item_score, total_score, overall_comment, strengths, weaknesses,
+       good_answer, improvement_needed, model_answer)
+    VALUES
+      (#{sessionId}, #{itemScore}, #{totalScore}, #{overallComment}, #{strengths}, #{weaknesses},
+       #{goodAnswer}, #{improvementNeeded}, #{modelAnswer})
+  </insert>
+
+  <!-- ───── 조회: 목록(세션 메타 + 종합점수 + 세션별 5축 평균) ───── -->
+  <select id="findSessionsByMember" resultType="map">
+    SELECT s.session_id        AS sessionId,
+           s.interview_type    AS interviewType,
+           s.question_count    AS questionCount,
+           s.started_at        AS startedAt,
+           r.total_score       AS totalScore,
+           jp.job_category     AS jobCategory,
+           ROUND(AVG(sc.technical_accuracy_score))  AS technical,
+           ROUND(AVG(sc.logical_structure_score))   AS logic,
+           ROUND(AVG(sc.specificity_score))         AS specificity,
+           ROUND(AVG(sc.depth_understanding_score)) AS depth,
+           ROUND(AVG(sc.communication_score))       AS communication
+    FROM interview_session s
+    LEFT JOIN interview_report r ON r.session_id = s.session_id
+    LEFT JOIN job_resume jr ON jr.job_resume_id = s.job_resume_id
+    LEFT JOIN job_posting jp ON jp.job_posting_id = jr.job_posting_id
+    LEFT JOIN question q ON q.session_id = s.session_id
+    LEFT JOIN answer a ON a.question_id = q.question_id
+    LEFT JOIN answer_score sc ON sc.answer_id = a.answer_id
+    WHERE s.member_id = #{memberId}
+    GROUP BY s.session_id, s.interview_type, s.question_count, s.started_at, r.total_score, jp.job_category
+    ORDER BY s.session_id DESC
+  </select>
+
+  <!-- ───── 조회: 단건 메타(소유 검증 포함) ───── -->
+  <select id="findSessionForMember" resultType="map">
+    SELECT s.session_id      AS sessionId,
+           s.member_id       AS memberId,
+           s.interview_type  AS interviewType,
+           s.interviewer_type AS interviewerType,
+           s.question_count  AS questionCount,
+           s.use_video       AS useVideo,
+           s.input_mode      AS inputMode,
+           s.started_at      AS startedAt,
+           jp.job_category   AS jobCategory
+    FROM interview_session s
+    LEFT JOIN job_resume jr ON jr.job_resume_id = s.job_resume_id
+    LEFT JOIN job_posting jp ON jp.job_posting_id = jr.job_posting_id
+    WHERE s.session_id = #{sessionId} AND s.member_id = #{memberId}
+  </select>
+
+  <!-- ───── 조회: 세션 질문/답변/5축(꼬리질문 포함, parent 로 구분) ───── -->
+  <select id="findQuestionsWithAnswers" resultType="map">
+    SELECT q.question_id        AS questionId,
+           q.question_text      AS questionText,
+           q.display_order      AS displayOrder,
+           q.parent_question_id AS parentQuestionId,
+           a.answer_text        AS answerText,
+           sc.technical_accuracy_score  AS technical,
+           sc.logical_structure_score   AS logic,
+           sc.specificity_score         AS specificity,
+           sc.depth_understanding_score AS depth,
+           sc.communication_score       AS communication,
+           sc.total_score               AS total,
+           sc.item_feedback             AS feedback
+    FROM question q
+    LEFT JOIN answer a ON a.question_id = q.question_id
+    LEFT JOIN answer_score sc ON sc.answer_id = a.answer_id
+    WHERE q.session_id = #{sessionId}
+    ORDER BY q.display_order ASC, q.question_id ASC
+  </select>
+
+  <select id="findReport" resultType="map">
+    SELECT total_score        AS totalScore,
+           overall_comment    AS overallComment,
+           strengths,
+           weaknesses,
+           improvement_needed AS improvementNeeded
+    FROM interview_report
+    WHERE session_id = #{sessionId}
+  </select>
+
+  <!-- ───── 집계: 5축 평균(레이더) ───── -->
+  <select id="statsAxisAverages" resultType="map">
+    SELECT ROUND(AVG(sc.technical_accuracy_score))  AS technical,
+           ROUND(AVG(sc.logical_structure_score))   AS logic,
+           ROUND(AVG(sc.specificity_score))         AS specificity,
+           ROUND(AVG(sc.depth_understanding_score)) AS depth,
+           ROUND(AVG(sc.communication_score))       AS communication
+    FROM answer_score sc
+    JOIN answer a ON a.answer_id = sc.answer_id
+    JOIN question q ON q.question_id = a.question_id
+    JOIN interview_session s ON s.session_id = q.session_id
+    WHERE s.member_id = #{memberId}
+  </select>
+
+  <!-- ───── 집계: 회차별 추이(성장 그래프) ───── -->
+  <select id="statsGrowth" resultType="map">
+    SELECT s.session_id  AS sessionId,
+           s.started_at  AS startedAt,
+           r.total_score AS totalScore
+    FROM interview_session s
+    JOIN interview_report r ON r.session_id = s.session_id
+    WHERE s.member_id = #{memberId}
+    ORDER BY s.session_id ASC
+  </select>
+
+</mapper>

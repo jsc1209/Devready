@@ -1,7 +1,9 @@
-import { useNavigate } from "react-router-dom";
-import { Box } from "@mui/material";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import { ArrowBack, Replay } from "@mui/icons-material";
 import InterviewReport from "./InterviewReport";
+import { getSession } from "../api/interviewApi";
 
 /**
  * 면접 세션 상세 (/history/:id) — test-demo-UI/SessionDetail.tsx → JS+MUI.
@@ -11,6 +13,32 @@ import InterviewReport from "./InterviewReport";
  */
 export default function SessionDetail() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(false);
+    getSession(id)
+      .then((d) => {
+        if (!alive) return;
+        if (d) setData(d);
+        else setError(true);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (alive) {
+          setError(true);
+          setLoading(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [id]);
 
   return (
     <Box>
@@ -65,7 +93,17 @@ export default function SessionDetail() {
           </Box>
         </Box>
       </Box>
-      <InterviewReport />
+      {loading ? (
+        <Box sx={{ maxWidth: 1024, mx: "auto", px: 2, py: 10, display: "flex", justifyContent: "center" }}>
+          <CircularProgress />
+        </Box>
+      ) : error || !data ? (
+        <Box sx={{ maxWidth: 1024, mx: "auto", px: 2, py: 10, textAlign: "center" }}>
+          <Typography sx={{ color: "text.secondary" }}>면접 기록을 불러오지 못했습니다.</Typography>
+        </Box>
+      ) : (
+        <InterviewReport data={data} />
+      )}
     </Box>
   );
 }

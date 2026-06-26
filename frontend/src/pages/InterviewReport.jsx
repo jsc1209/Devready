@@ -30,7 +30,7 @@ import {
   SURVEY_EVERY,
   starGuide,
 } from "../data/interviewReportMock";
-import { generateReport } from "../api/interviewApi";
+import { generateReport, saveSession } from "../api/interviewApi";
 
 const mono = "'DM Mono', monospace";
 
@@ -148,10 +148,13 @@ function ScoreRow({ label, value, max, color }) {
   );
 }
 
-export default function InterviewReport() {
+export default function InterviewReport({ data } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state;
+  // data prop(과거 세션 조회) 우선, 없으면 navigate state(방금 끝낸 면접). 둘 다 없으면 mock.
+  const state = data ?? location.state;
+  // '방금 완료한 실면접'인지 — AI 리포트 호출/저장/설문은 이때만.
+  const isFresh = !data && !!(location.state?.entries && location.state.entries.length > 0);
 
   const entries = (state?.entries && state.entries.length > 0) ? state.entries : MOCK_ENTRIES;
   const config = state?.config ?? MOCK_CONFIG;
@@ -166,12 +169,12 @@ export default function InterviewReport() {
   const [survey, setSurvey] = useState({ overall: 0, quality: 0, usability: 0, recommend: 0, comment: "" });
 
   // AI 종합 리포트(/interview/report) — 실제 면접 완료 시에만 호출, 실패/524 시 클라이언트 계산으로 폴백
-  const [aiReport, setAiReport] = useState(null);
+  const [aiReport, setAiReport] = useState(data?.aiReport ?? null);
   const [reportLoading, setReportLoading] = useState(false);
 
   useEffect(() => {
-    // 실제 면접 완료로 들어온 경우만(딥링크 재방문 중복 카운트 방지)
-    if (!state?.entries || state.entries.length === 0) return;
+    // 실제 면접 완료(fresh)만 카운트. 과거 조회(data)·mock·딥링크 제외.
+    if (!isFresh) return;
     let count = 0;
     try { count = parseInt(localStorage.getItem("devready_interview_count") ?? "0", 10) || 0; } catch { count = 0; }
     count += 1;
@@ -181,12 +184,13 @@ export default function InterviewReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 면접 종료 후 entries → results 로 변환해 AI 종합 리포트 호출(실제 면접 완료 시에만).
+  // 면접 종료 후 entries → results 로 AI 종합 리포트 호출 + 그 결과를 DB 저장(실제 완료 시에만).
   useEffect(() => {
-    if (!state?.entries || state.entries.length === 0) return; // mock/딥링크 → 호출 안 함
+    if (!isFresh) return; // 과거 조회(data)·mock·딥링크 → 호출/저장 안 함
+    const ls = location.state;
     let cancelled = false;
     // FastAPI 4축으로 변환(우리 5키 중 depth 제외, 나머지 1:1). question·feedback 동봉.
-    const results = state.entries.map((e) => ({
+    const results = ls.entries.map((e) => ({
       question: e.question ?? e.main ?? "",
       evaluation: {
         scores: {
@@ -200,8 +204,9 @@ export default function InterviewReport() {
     }));
     setReportLoading(true);
     (async () => {
+      let res = null;
       try {
-        const res = await generateReport({ results, lang: "ko" });
+        res = await generateReport({ results, lang: "ko" });
         const rep = res?.ok ? res.report : null;
         if (!cancelled && rep && (rep.summary || rep.strengths?.length || rep.weaknesses?.length || rep.guide?.length)) {
           setAiReport(res);
@@ -210,6 +215,36 @@ export default function InterviewReport() {
         // 실패/524 → aiReport null 유지(클라이언트 계산 폴백)
       } finally {
         if (!cancelled) setReportLoading(false);
+      }
+      // 결과 저장 — 로그인+바인딩(jobResumeId) 있을 때만. AI 리포트 결과 재사용(중복 호출 회피).
+      // 실패/폴백 시 빈 리포트로 저장(점수는 실제 계산값 — 위조 아님). 저장 실패는 화면에 영향 없음.
+      if (!cancelled && ls.jobResumeId) {
+        const rep = res?.ok ? res.report : null;
+        const payload = {
+          jobResumeId: ls.jobResumeId,
+          meta: ls.sessionMeta ?? {},
+          entries: ls.entries.map((e) => ({
+            question: e.question ?? e.main ?? "",
+            answer: e.answer ?? "",
+            scores: e.scores,
+            feedback: e.aiFeedback?.feedback ?? "",
+            followupQ: e.followupQ ?? e.followup ?? "",
+            followupA: e.followupA ?? e.followupAnswer ?? "",
+          })),
+          report: rep
+            ? {
+                summary: rep.summary ?? "",
+                strengths: rep.strengths ?? [],
+                weaknesses: rep.weaknesses ?? [],
+                guide: rep.guide ?? [],
+              }
+            : { summary: "", strengths: [], weaknesses: [], guide: [] },
+        };
+        try {
+          await saveSession(payload);
+        } catch {
+          /* 저장 실패 무시(리포트 표시는 유지) */
+        }
       }
     })();
     return () => {
