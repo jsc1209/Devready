@@ -1,8 +1,8 @@
-import { Routes, Route, Link } from 'react-router-dom'
+import { Routes, Route, Link, Navigate } from 'react-router-dom'
 import { Box, Typography, Button, Stack } from '@mui/material'
 import ResumeAnalyzePage from './pages/ResumeAnalyzePage'
 import SignupPage from "./pages/SignupPage";
-import LoginPage from "./pages/LoginPage";
+import AuthPage from "./pages/AuthPage";
 import MyPage from "./pages/MyPage";
 import LandingPage from "./pages/LandingPage";
 import HistoryPage from "./pages/HistoryPage";
@@ -42,7 +42,8 @@ const App = () => (
       <Route path="/demo" element={<Home />} />
       <Route path="/resume" element={<ResumeAnalyzePage />} />
       <Route path="/signup" element={<SignupPage />} />
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login" element={<Navigate to="/auth" replace />} />
+      <Route path="/auth" element={<AuthPage />} />
       <Route path="/me" element={<MyPage />} />
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/history/:id" element={<SessionDetail />} />
