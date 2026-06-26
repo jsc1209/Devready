@@ -13,4 +13,9 @@
     SELECT member_id, email, password, name, phone, nickname, role, status
     FROM member WHERE email = #{email}
   </select>
+  <!-- /api/me·마이페이지 기본정보 조회용. 비밀번호(password)는 의도적으로 제외. -->
+  <select id="findById" resultType="com.devready.backend_user.auth.vo.MemberVO">
+    SELECT member_id, email, name, phone, nickname, role, status
+    FROM member WHERE member_id = #{memberId}
+  </select>
 </mapper>
