@@ -23,7 +23,10 @@ import {
   Language,
   SentimentSatisfiedAlt,
 } from "@mui/icons-material";
-import { STEPS, CONSENT_ITEMS, RESUMES } from "../data/interviewSetupMock";
+import { STEPS, CONSENT_ITEMS } from "../data/interviewSetupMock";
+import { getMyResumes } from "../api/resumeApi";
+import { getJobs } from "../api/jobsApi";
+import { bindJobResume } from "../api/jobResumeApi";
 
 // 원본 ../auth 의 실행 가드(프로토타입 localStorage 플래그)를 EducationPage 처럼 인라인 복제.
 function isAuthed() {
@@ -70,6 +73,23 @@ const IS_PREMIUM = true;
 
 const secondary = "#F8F9FF"; // bg-secondary
 
+// 선택된 저장 이력서 스냅샷 → generate(맞춤 질문) 입력용 텍스트. (textarea 직접입력이 있으면 그쪽 우선)
+function composeResumeText(data) {
+  if (!data) return "";
+  const b = data.basic || {};
+  const parts = [];
+  if (b.name) parts.push(`이름: ${b.name}`);
+  if (Array.isArray(data.careers) && data.careers.length) {
+    parts.push("경력:");
+    data.careers.forEach((c) =>
+      parts.push(`- ${[c.company, c.role, c.period, c.desc].filter(Boolean).join(" ")}`)
+    );
+  }
+  if (Array.isArray(data.skills) && data.skills.length) parts.push(`스킬: ${data.skills.join(", ")}`);
+  if (data.coverText) parts.push(`자기소개서: ${data.coverText}`);
+  return parts.join("\n");
+}
+
 /**
  * 면접 설정 (/interview/setup) — test-demo-UI/InterviewSetup.tsx → JS+MUI.
  * 자체 풀페이지(중앙정렬 + 그라데이션 배경) 본문. 공통 헤더/띠는 Layout 담당.
@@ -108,9 +128,30 @@ export default function InterviewSetup() {
   const [consents, setConsents] = useState(
     Object.fromEntries(CONSENT_ITEMS.map((c) => [c.id, false]))
   );
-  const [resume, setResume] = useState("");
+  const [resume, setResume] = useState(""); // 선택된 저장 이력서의 resumeId(문자열)
   const [resumeText, setResumeText] = useState(""); // 맞춤 질문 생성용 이력서 본문(선택)
   const [jobPostingText, setJobPostingText] = useState(""); // 맞춤 질문 생성용 공고 본문(선택)
+
+  // 저장된 이력서(DB) 목록 — 면접에 사용할 이력서 선택지. 공고 선택기(직접 진입 시) + 바인딩 상태.
+  const [myResumes, setMyResumes] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState(jobContext?.jobId ?? "");
+  const [binding, setBinding] = useState(false);
+  const [bindError, setBindError] = useState("");
+
+  useEffect(() => {
+    getMyResumes()
+      .then((list) => setMyResumes(Array.isArray(list) ? list : []))
+      .catch(() => setMyResumes([]));
+    if (!jobContext) {
+      getJobs()
+        .then((list) => setJobs(Array.isArray(list) ? list : []))
+        .catch(() => setJobs([]));
+    }
+  }, []);
+
+  // 공고에서 진입(jobContext)했으면 그 공고, 아니면 선택한 공고.
+  const effectiveJobId = jobContext?.jobId ?? selectedJobId;
 
   // 본문 입력 textarea 공통 스타일
   const textareaSx = {
@@ -136,20 +177,47 @@ export default function InterviewSetup() {
   const allChecked = CONSENT_ITEMS.every((c) => consents[c.id]);
   const videoEnabled = consents.video_record; // 영상 동의 → 영상 면접 / 미동의 → 음성 면접
 
-  const canNext = [consentOk, !!resume, !!type && !!companyType, true, true][step];
+  const canNext = [consentOk, !!resume && !!effectiveJobId, !!type && !!companyType, true, !binding][step];
 
   const toggleAll = () => {
     const next = !allChecked;
     setConsents(Object.fromEntries(CONSENT_ITEMS.map((c) => [c.id, next])));
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < STEPS.length - 1) {
       setStep(step + 1);
-    } else {
+      return;
+    }
+    // 면접 시작: 선택한 저장 이력서를 공고에 바인딩 → jobResumeId 확보 후 Session 으로(슬라이스4가 사용).
+    setBindError("");
+    setBinding(true);
+    try {
+      const selected = myResumes.find((r) => String(r.resumeId) === String(resume));
+      const { jobResumeId } = await bindJobResume({ resumeId: resume, jobPostingId: effectiveJobId });
+      const effectiveResumeText = resumeText.trim() ? resumeText : composeResumeText(selected?.data);
       navigate("/interview/session", {
-        state: { job, level, type, companyType, interviewer, count, coverText, resume, resumeText, jobPostingText, jobContext, videoEnabled },
+        state: {
+          job,
+          level,
+          type,
+          companyType,
+          interviewer,
+          count,
+          coverText,
+          resume,
+          resumeText: effectiveResumeText,
+          jobPostingText,
+          jobContext,
+          videoEnabled,
+          jobResumeId,
+          resumeId: resume,
+          jobPostingId: effectiveJobId,
+        },
       });
+    } catch {
+      setBindError("이력서를 공고에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setBinding(false);
     }
   };
 
@@ -548,55 +616,101 @@ export default function InterviewSetup() {
                 </Box>
               </Typography>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 3 }}>
-                {RESUMES.map((r) => (
+                {myResumes.length === 0 && (
+                  <Typography sx={{ fontSize: 13, color: "text.secondary", py: 2, textAlign: "center" }}>
+                    저장된 이력서가 없습니다. 이력서 페이지에서 작성·저장 후 이용해주세요.
+                  </Typography>
+                )}
+                {myResumes.map((r) => {
+                  const rid = String(r.resumeId);
+                  const latest = r.versions && r.versions.length ? r.versions[r.versions.length - 1] : null;
+                  return (
+                    <Box
+                      key={rid}
+                      component="button"
+                      type="button"
+                      onClick={() => setResume(rid)}
+                      sx={{
+                        p: 1.75,
+                        borderRadius: "12px",
+                        border: "1px solid",
+                        textAlign: "left",
+                        font: "inherit",
+                        cursor: "pointer",
+                        transition: "all .2s",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        ...(resume === rid
+                          ? { borderColor: "primary.main", bgcolor: "rgba(108,99,255,0.05)" }
+                          : {
+                              borderColor: "divider",
+                              bgcolor: secondary,
+                              "&:hover": { borderColor: "rgba(108,99,255,0.4)" },
+                            }),
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Description
+                          sx={{
+                            fontSize: 16,
+                            flexShrink: 0,
+                            color: resume === rid ? "primary.main" : "text.secondary",
+                          }}
+                        />
+                        <Box>
+                          <Typography sx={{ fontWeight: 500, fontSize: 14, color: "text.primary" }}>
+                            {r.name || "이력서"}
+                          </Typography>
+                          <Typography sx={{ fontSize: 12, color: "text.secondary", mt: "2px" }}>
+                            {latest ? `${latest.label} · ${latest.date}` : "저장됨"}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      {resume === rid && (
+                        <CheckCircle sx={{ fontSize: 20, color: "primary.main", flexShrink: 0 }} />
+                      )}
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              {/* 공고 선택 — 공고에서 진입(jobContext)하지 않았을 때만. job_resume 바인딩에 필요. */}
+              {!jobContext && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography sx={{ fontSize: 14, fontWeight: 500, color: "text.primary", mb: 1 }}>
+                    지원 공고 선택{" "}
+                    <Box component="span" sx={{ color: "primary.main" }}>
+                      (필수)
+                    </Box>
+                  </Typography>
                   <Box
-                    key={r.id}
-                    component="button"
-                    type="button"
-                    onClick={() => setResume(r.id)}
+                    component="select"
+                    value={selectedJobId}
+                    onChange={(e) => setSelectedJobId(e.target.value)}
                     sx={{
-                      p: 1.75,
+                      width: "100%",
+                      px: 1.5,
+                      py: 1.25,
                       borderRadius: "12px",
+                      bgcolor: secondary,
                       border: "1px solid",
-                      textAlign: "left",
+                      borderColor: "divider",
+                      color: "text.primary",
+                      fontSize: 14,
                       font: "inherit",
-                      cursor: "pointer",
-                      transition: "all .2s",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      ...(resume === r.id
-                        ? { borderColor: "primary.main", bgcolor: "rgba(108,99,255,0.05)" }
-                        : {
-                            borderColor: "divider",
-                            bgcolor: secondary,
-                            "&:hover": { borderColor: "rgba(108,99,255,0.4)" },
-                          }),
+                      "&:focus": { outline: "none", borderColor: "rgba(108,99,255,0.6)" },
                     }}
                   >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                      <Description
-                        sx={{
-                          fontSize: 16,
-                          flexShrink: 0,
-                          color: resume === r.id ? "primary.main" : "text.secondary",
-                        }}
-                      />
-                      <Box>
-                        <Typography sx={{ fontWeight: 500, fontSize: 14, color: "text.primary" }}>
-                          {r.title}
-                        </Typography>
-                        <Typography sx={{ fontSize: 12, color: "text.secondary", mt: "2px" }}>
-                          {r.desc} · {r.date}
-                        </Typography>
-                      </Box>
-                    </Box>
-                    {resume === r.id && (
-                      <CheckCircle sx={{ fontSize: 20, color: "primary.main", flexShrink: 0 }} />
-                    )}
+                    <option value="">공고를 선택하세요</option>
+                    {jobs.map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.company} — {j.title}
+                      </option>
+                    ))}
                   </Box>
-                ))}
-              </Box>
+                </Box>
+              )}
 
               <Box sx={{ borderTop: "1px solid", borderColor: "divider", pt: 2.5 }}>
                 <Typography
@@ -860,7 +974,7 @@ export default function InterviewSetup() {
                 }}
               >
                 {[
-                  ["이력서", RESUMES.find((r) => r.id === resume)?.title ?? "-"],
+                  ["이력서", myResumes.find((r) => String(r.resumeId) === resume)?.name ?? "-"],
                   ["면접 방식", videoEnabled ? "영상 면접" : "음성 면접"],
                   ["면접 유형", TYPES.find((t) => t.id === type)?.label ?? "-"],
                   ["회사 유형", COMPANY_TYPES.find((c) => c.id === companyType)?.label ?? "-"],
@@ -1110,6 +1224,23 @@ export default function InterviewSetup() {
           )}
         </Box>
 
+        {bindError && (
+          <Box
+            sx={{
+              mt: 2,
+              p: 1.5,
+              borderRadius: "12px",
+              bgcolor: "#FEF2F2",
+              border: "1px solid #FECACA",
+              color: "#DC2626",
+              fontSize: 13,
+              textAlign: "center",
+            }}
+          >
+            {bindError}
+          </Box>
+        )}
+
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 2.5 }}>
           {step > 0 ? (
             <Box
@@ -1159,7 +1290,7 @@ export default function InterviewSetup() {
               "&:disabled": { opacity: 0.4, cursor: "default" },
             }}
           >
-            {step < STEPS.length - 1 ? "다음" : "면접 시작"}
+            {step < STEPS.length - 1 ? "다음" : binding ? "연결 중…" : "면접 시작"}
             <ChevronRight sx={{ fontSize: 16 }} />
           </Box>
         </Box>
