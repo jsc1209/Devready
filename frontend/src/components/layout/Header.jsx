@@ -141,9 +141,13 @@ export default function Header() {
           >
             {token ? (
               <>
-                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                <Button
+                  size="small"
+                  onClick={() => navigate("/mypage")}
+                  sx={{ color: "text.secondary", "&:hover": { color: "primary.main", bgcolor: "action.hover" } }}
+                >
                   {user?.nickname ?? "사용자"}님
-                </Typography>
+                </Button>
                 <Button size="small" onClick={handleLogout}>
                   로그아웃
                 </Button>
@@ -242,9 +246,13 @@ export default function Header() {
                 py: 0.5,
               }}
             >
-              <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
+              <Button
+                size="small"
+                onClick={() => go("/mypage")}
+                sx={{ fontSize: 14, color: "text.secondary", "&:hover": { color: "primary.main" } }}
+              >
                 {user?.nickname ?? "사용자"}님
-              </Typography>
+              </Button>
               <Button size="small" onClick={handleLogout}>
                 로그아웃
               </Button>
