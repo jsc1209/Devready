@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import {
   AutoAwesome,
   Mic,
@@ -18,6 +18,7 @@ import {
   MonitorHeart,
 } from "@mui/icons-material";
 import { Q_BANK, PERSONALITY_QUESTIONS } from "../data/interviewSessionMock";
+import { evaluateAnswer, mapScores } from "../api/interviewApi";
 
 // Mock followup generation based on answer
 function generateFollowup(question, answer) {
@@ -130,6 +131,7 @@ export default function InterviewSession() {
   const [warmup, setWarmup] = useState(true);
   const [warmupLeft, setWarmupLeft] = useState(WARMUP_SECONDS);
   const [micDb, setMicDb] = useState(0);
+  const [scoring, setScoring] = useState(false); // AI 채점(EXAONE ~140s) 진행 중 — 로딩 오버레이 + 중복 제출 방지
 
   // Video/camera refs
   const videoRef = useRef(null);
@@ -328,20 +330,49 @@ export default function InterviewSession() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (scoring) return; // AI 채점 중 중복 제출 방지
     if (intervalRef.current) clearInterval(intervalRef.current);
     setRecording(false);
     stopSTT();
 
+    const answerText = answer; // 제출 시점 답변 고정(텍스트/음성 공통 출처)
     const elapsed = (Date.now() - answerStartTime) / 1000 / 60;
-    const words = answer.trim().split(/\s+/).length;
+    const words = answerText.trim().split(/\s+/).length;
     const wpm = elapsed > 0 ? Math.round(words / elapsed) : 0;
-    const scores = scoreAnswer(answer, entries[idx].main);
-    const star = analyzeSTAR(answer);
 
     if (phase === "answering") {
-      // 메인 질문 답변 저장
-      setEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, answer, scores, star, wpm, answerTime: Math.round(elapsed * 60) } : e)));
+      // ── 메인 질문 답변: AI 채점 실연동(Spring 게이트웨이). 실패/지연 시 mock 폴백 ──
+      setScoring(true);
+      let scores;
+      let aiFeedback = null;
+      try {
+        const res = await evaluateAnswer({ question: entries[idx].main, answer: answerText, lang: "ko" });
+        if (res?.success && res.data?.scores) {
+          scores = mapScores(res.data); // 4축 → 5키
+          aiFeedback = {
+            feedback: res.data.feedback ?? "",
+            strengths: res.data.strengths ?? [],
+            improvements: res.data.improvements ?? [],
+          };
+        } else {
+          throw new Error(res?.message || "AI 채점 응답 오류");
+        }
+      } catch {
+        scores = scoreAnswer(answerText, entries[idx].main); // mock 폴백(연동 실패/미가동)
+      } finally {
+        setScoring(false);
+      }
+      const star = analyzeSTAR(answerText); // STAR 는 evaluate 응답에 없음 → mock 유지
+
+      // 메인 질문 답변 저장 (aiFeedback 은 있을 때만 옵션 필드로 — Report 는 미사용, 향후 확장용)
+      setEntries((prev) =>
+        prev.map((e, i) =>
+          i === idx
+            ? { ...e, answer: answerText, scores, star, wpm, answerTime: Math.round(elapsed * 60), ...(aiFeedback ? { aiFeedback } : {}) }
+            : e
+        )
+      );
       setAnswer("");
       setSttTranscript("");
       if (idx < TOTAL - 1) {
@@ -353,13 +384,13 @@ export default function InterviewSession() {
         // 메인 질문 종료 → 꼬리질문 단계 시작 (마지막 질문들 기준 1~2개)
         const fEntry = TOTAL - followupTarget;
         setFollowupStep(0);
-        setCurrentFollowup(generateFollowup(entries[fEntry].main, entries[fEntry].answer || answer));
+        setCurrentFollowup(generateFollowup(entries[fEntry].main, entries[fEntry].answer || answerText));
         setPhase("followup");
       }
     } else {
-      // 꼬리질문 답변 저장 (해당 질문 entry에 기록 → 리포트 호환)
+      // ── 꼬리질문 답변 저장 (AI 채점 없음 — 기존 로직) ──
       const targetIdx = TOTAL - followupTarget + followupStep;
-      setEntries((prev) => prev.map((e, i) => (i === targetIdx ? { ...e, followup: currentFollowup, followupAnswer: answer } : e)));
+      setEntries((prev) => prev.map((e, i) => (i === targetIdx ? { ...e, followup: currentFollowup, followupAnswer: answerText } : e)));
       setAnswer("");
       setSttTranscript("");
       if (followupStep < followupTarget - 1) {
@@ -371,8 +402,11 @@ export default function InterviewSession() {
         setPhase("followup");
         setTimeLeft(TIME_PER_Q);
       } else {
-        // 모든 꼬리질문 종료 → 리포트
-        const finalEntries = entries.map((e, i) => (i === targetIdx ? { ...e, followup: currentFollowup, followupAnswer: answer } : e));
+        // 모든 꼬리질문 종료 → 리포트.
+        // ★ 필드명 정합(발견2): Report 가 읽는 question/followupQ/followupA 로 매핑(내부 키는 유지).
+        const finalEntries = entries
+          .map((e, i) => (i === targetIdx ? { ...e, followup: currentFollowup, followupAnswer: answerText } : e))
+          .map((e) => ({ ...e, question: e.main, followupQ: e.followup, followupA: e.followupAnswer }));
         navigate("/interview/report/demo", { state: { entries: finalEntries, config: { job, level, type, interviewer, companyType: config.companyType } } });
       }
     }
@@ -508,6 +542,32 @@ export default function InterviewSession() {
           >
             바로 시작하기
           </Box>
+        </Box>
+      )}
+
+      {/* AI 채점 로딩 — 메인 답변 제출 후 EXAONE 채점(최대 2~3분), 화면 잠금으로 멈춤 오해 방지 */}
+      {scoring && (
+        <Box
+          sx={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 60,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            px: 2,
+            color: "#fff",
+            background: "rgba(15,23,42,0.96)",
+          }}
+        >
+          <CircularProgress sx={{ color: "#fff", mb: 3 }} />
+          <Typography sx={{ fontSize: 20, fontWeight: 700, mb: 1 }}>AI가 답변을 채점하고 있습니다</Typography>
+          <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: 14, textAlign: "center", lineHeight: 1.625 }}>
+            EXAONE 모델이 5축으로 평가 중입니다. 최대 2~3분 소요될 수 있어요.
+            <br />
+            창을 닫지 말고 잠시만 기다려 주세요.
+          </Typography>
         </Box>
       )}
 
@@ -875,7 +935,7 @@ export default function InterviewSession() {
                     component="button"
                     type="button"
                     onClick={handleSubmit}
-                    disabled={answer.trim().length < 5}
+                    disabled={answer.trim().length < 5 || scoring}
                     sx={{
                       display: "flex",
                       alignItems: "center",
@@ -895,7 +955,7 @@ export default function InterviewSession() {
                     }}
                   >
                     <ChevronRight sx={{ fontSize: 16 }} />
-                    {phase === "answering" ? "답변 완료" : followupStep < followupTarget - 1 ? "다음 질문" : "면접 완료"}
+                    {scoring ? "AI 채점 중..." : phase === "answering" ? "답변 완료" : followupStep < followupTarget - 1 ? "다음 질문" : "면접 완료"}
                   </Box>
                 </Box>
               </Box>
@@ -967,6 +1027,7 @@ export default function InterviewSession() {
                   component="button"
                   type="button"
                   onClick={handleSubmit}
+                  disabled={scoring}
                   sx={{
                     display: "flex",
                     alignItems: "center",
@@ -983,10 +1044,11 @@ export default function InterviewSession() {
                     cursor: "pointer",
                     transition: "background-color .2s",
                     "&:hover": { bgcolor: "#F1F3FB" },
+                    "&:disabled": { opacity: 0.4, cursor: "default" },
                   }}
                 >
                   <Stop sx={{ fontSize: 16, color: "#F87171" }} />
-                  답변 완료
+                  {scoring ? "AI 채점 중..." : "답변 완료"}
                 </Box>
               </Box>
             )}
