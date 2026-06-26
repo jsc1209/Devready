@@ -215,6 +215,19 @@ CREATE TABLE `skill` (
   PRIMARY KEY (`skill_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='스킬';
 
+-- [슬라이스 가] 이력서 멀티버전(v1/v2 스냅샷) 영속화용. resume 가 위에서 먼저 생성되므로 FK 유효.
+DROP TABLE IF EXISTS `resume_version`;
+CREATE TABLE `resume_version` (
+  `version_id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '이력서 버전 식별 값',
+  `resume_id` BIGINT NOT NULL COMMENT '기본 이력서',
+  `version_no` INT NOT NULL COMMENT '버전 번호',
+  `label` VARCHAR(100) NOT NULL COMMENT '버전 라벨',
+  `snapshot` LONGTEXT NOT NULL COMMENT '이력서 전체 스냅샷(JSON 문자열)',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성 시각',
+  PRIMARY KEY (`version_id`),
+  CONSTRAINT `fk_resume_version_resume_id` FOREIGN KEY (`resume_id`) REFERENCES `resume` (`resume_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='이력서 버전 스냅샷';
+
 DROP TABLE IF EXISTS `interview_session`;
 CREATE TABLE `interview_session` (
   `session_id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '세션 식별 값',
@@ -955,3 +968,35 @@ CREATE TABLE `ad_inquiry_product` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='광고문의-상품 연결';
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================================
+-- [슬라이스 가] 시드 데이터 (FK 의존 순서: member → job_posting / cover_letter_template)
+-- FK_CHECKS=1 구간이라 참조 무결성이 실제로 검사된다.
+-- ============================================================
+
+-- 관리자 계정 1행: job_posting·cover_letter_template 의 admin_id(FK) 타깃 전용.
+-- password 는 NULL(로그인 불가). 실제 운영 계정 아님.
+INSERT INTO `member`
+  (`member_id`, `email`, `name`, `phone`, `nickname`, `last_login_method`, `role`, `status`)
+VALUES
+  (1, 'admin@devready.local', '관리자', '000-0000-0000', '관리자', 'EMAIL', 'ADMIN', 'ACTIVE');
+
+-- 채용 공고 6건 (프론트 jobsMock 기반). requirements·preferred 는 배열을 ', ' 로 합침.
+INSERT INTO `job_posting`
+  (`company_name`, `job_category`, `requirements`, `preferred_qualifications`, `deadline`, `posting_url`, `status`, `admin_id`)
+VALUES
+  ('카카오', '프론트엔드 개발자', 'React 숙련자, TypeScript 경험, 상태관리 라이브러리 사용 경험', 'Next.js SSR/SSG 경험, 성능 최적화 경험(Core Web Vitals), 디자인 시스템 구축 경험, 오픈소스 기여 경험', '2026-06-20', 'https://devready.local/jobs/1', 'OPEN', 1),
+  ('네이버', '풀스택 개발자', 'Node.js + React 3년 이상, AWS 인프라 운영 경험, 대용량 트래픽 처리 경험', '쿠버네티스/도커 운영 경험, 검색 엔진(Elasticsearch) 활용 경험, 결제 시스템 개발 경험', '2026-06-25', 'https://devready.local/jobs/2', 'OPEN', 1),
+  ('토스', '백엔드 개발자 (Java)', 'Java/Spring Boot 2년 이상, MySQL 최적화 경험, 고가용성 서비스 경험', '금융 도메인 서비스 경험, JPA/Querydsl 경험, Redis 캐싱 전략 경험, gRPC 사용 경험', '2026-07-01', 'https://devready.local/jobs/3', 'OPEN', 1),
+  ('라인', '프론트엔드 개발자', 'Vue.js 또는 React 경험, HTML/CSS 기초 탄탄, 팀 협업 경험', '글로벌 서비스 경험, 웹 접근성(WCAG) 이해, 애니메이션/인터랙션 구현 경험', '2026-06-28', 'https://devready.local/jobs/4', 'OPEN', 1),
+  ('쿠팡', '데이터 엔지니어', 'Python 데이터 처리 경험, Spark/Kafka 운영 경험, SQL 고급 쿼리 작성', 'Airflow 워크플로우 관리 경험, Flink 실시간 처리 경험, 데이터 레이크 하우스 아키텍처 이해', '2026-07-10', 'https://devready.local/jobs/5', 'OPEN', 1),
+  ('우아한형제들', 'iOS 개발자', 'Swift 2년 이상, UIKit/SwiftUI 경험, 앱 출시 경험', 'Combine/RxSwift 경험, CI/CD(Fastlane) 경험, Core Data 또는 Realm 사용 경험, 코드 리뷰 문화 경험', '2026-07-05', 'https://devready.local/jobs/6', 'OPEN', 1);
+
+-- 자기소개서 기본 항목 템플릿 (관리자 관리).
+INSERT INTO `cover_letter_template`
+  (`item_name`, `default_order`, `is_active`, `admin_id`)
+VALUES
+  ('성장과정', 1, 1, 1),
+  ('지원동기', 2, 1, 1),
+  ('직무 역량 및 강점·약점', 3, 1, 1),
+  ('입사 후 포부', 4, 1, 1);
