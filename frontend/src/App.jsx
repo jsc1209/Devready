@@ -14,6 +14,7 @@ import CodingTestPage from "./pages/CodingTestPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CommunityPage from "./pages/CommunityPage";
 import CalendarPage from "./pages/CalendarPage";
+import MyPageFull from "./pages/MyPageFull";
 import InterviewSetup from "./pages/InterviewSetup";
 import InterviewPayment from "./pages/InterviewPayment";
 import InterviewReport from "./pages/InterviewReport";
@@ -55,6 +56,7 @@ const App = () => (
       <Route path="/education/course/:id" element={<CourseDetailPage />} />
       <Route path="/community" element={<CommunityPage />} />
       <Route path="/calendar" element={<CalendarPage />} />
+      <Route path="/mypage" element={<MyPageFull />} />
     </Route>
     {/* 면접 진행은 헤더/띠 없는 풀스크린 몰입형 (원본 Root: /interview/session 는 Layout 제외) */}
     <Route path="/interview/session" element={<InterviewSession />} />
