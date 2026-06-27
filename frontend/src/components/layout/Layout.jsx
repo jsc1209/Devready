@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { Box } from "@mui/material";
 import AnnouncementBanner from "./AnnouncementBanner";
 import Header from "./Header";
+import ChatbotWidget from "../ChatbotWidget";
 
 /**
  * 공통 레이아웃: 상단 띠 + 헤더 + <Outlet/>(페이지 자리).
@@ -22,6 +23,7 @@ export default function Layout() {
       <Box component="main" sx={{ flex: 1 }}>
         <Outlet />
       </Box>
+      <ChatbotWidget />
     </Box>
   );
 }
